@@ -21,6 +21,13 @@ example_data = {
 
 df = st.data_editor(pd.DataFrame(example_data), num_rows="dynamic", use_container_width=True)
 
+def fig_to_image(fig):
+    from io import BytesIO
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    buf.seek(0)
+    return buf
+
 if st.button("🎯 Liniennetz anzeigen"):
     try:
         fig, ax = plt.subplots(figsize=(12, 6))
@@ -61,10 +68,3 @@ if st.button("🎯 Liniennetz anzeigen"):
 
     except Exception as e:
         st.error(f"Fehler: {e}")
-
-def fig_to_image(fig):
-    from io import BytesIO
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
-    buf.seek(0)
-    return buf
