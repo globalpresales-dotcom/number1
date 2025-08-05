@@ -8,10 +8,10 @@ from datetime import datetime
 import numpy as np
 from io import BytesIO
 
-st.set_page_config(page_title="Projektliniennetzplan V6", layout="wide")
-st.title("🚇 Projektliniennetzplan – V6: Parallele Linien, Zeitleiste & Textformatierung")
+st.set_page_config(page_title="Projektliniennetzplan V7", layout="wide")
+st.title("🚇 Projektliniennetzplan – V7: Punktzentrierung fixiert")
 
-st.markdown("Linien verlaufen nebeneinander bei gemeinsamen Haltestellen, unten wird eine Zeitleiste dargestellt, Texte sind formatierbar.")
+st.markdown("Fix: Haltestellenpunkte (⭘) sind jetzt korrekt zentriert auf versetzten Linien.")
 
 st.subheader("📝 Eingabetabelle")
 
@@ -60,20 +60,7 @@ if st.button("🎯 Liniennetz anzeigen & exportieren"):
         patch = mpatches.PathPatch(path, facecolor='none', lw=4, edgecolor=color, linestyle=style, zorder=1)
         ax.add_patch(patch)
 
-    # Linienverläufe berechnen
-    for linie in df["Linie"].unique():
-        ldf = df[df["Linie"] == linie].sort_values(by="Datum")
-        for i in range(len(ldf) - 1):
-            x0, y0 = ldf.iloc[i]["Datum"], ldf.iloc[i]["Y"]
-            x1, y1 = ldf.iloc[i + 1]["Datum"], ldf.iloc[i + 1]["Y"]
-            farbe = ldf.iloc[i]["Farbe"]
-            stil = ldf.iloc[i]["Linienart"]
-            if y0 == y1:
-                ax.plot([x0, x1], [y0, y1], color=farbe, lw=4, linestyle=stil, zorder=1)
-            else:
-                draw_curve(x0, y0, x1, y1, farbe, stil)
-
-    # Gemeinsame Haltestellen → Offset je Linie erzeugen
+    # Versatz für parallele Linien
     shared_points = df.groupby(["Datum", "Meilenstein"]).filter(lambda g: len(g) > 1)
     for (datum, ms), group in shared_points.groupby(["Datum", "Meilenstein"]):
         lines = list(group["Linie"].unique())
@@ -81,7 +68,25 @@ if st.button("🎯 Liniennetz anzeigen & exportieren"):
             key = (datum, ms, linie)
             y_offsets[key] = i * 0.15 - (len(lines) - 1) * 0.15 / 2  # zentriert
 
-    # Haltestellen + Texte
+    # Linien zeichnen
+    for linie in df["Linie"].unique():
+        ldf = df[df["Linie"] == linie].sort_values(by="Datum")
+        for i in range(len(ldf) - 1):
+            x0, y0_base = ldf.iloc[i]["Datum"], ldf.iloc[i]["Y"]
+            x1, y1_base = ldf.iloc[i + 1]["Datum"], ldf.iloc[i + 1]["Y"]
+            ms0 = ldf.iloc[i]["Meilenstein"]
+            ms1 = ldf.iloc[i + 1]["Meilenstein"]
+            o0 = y_offsets.get((x0, ms0, linie), 0)
+            o1 = y_offsets.get((x1, ms1, linie), 0)
+            y0, y1 = y0_base + o0, y1_base + o1
+            farbe = ldf.iloc[i]["Farbe"]
+            stil = ldf.iloc[i]["Linienart"]
+            if y0 == y1:
+                ax.plot([x0, x1], [y0, y1], color=farbe, lw=4, linestyle=stil, zorder=1)
+            else:
+                draw_curve(x0, y0, x1, y1, farbe, stil)
+
+    # Punkte + Texte
     for idx, row in df.iterrows():
         x = row["Datum"]
         y = row["Y"]
@@ -111,21 +116,19 @@ if st.button("🎯 Liniennetz anzeigen & exportieren"):
                 fontweight="bold" if "bold" in font_style else "normal",
                 zorder=6)
 
-    # Zeitachse / Zeitleiste
+    # Zeitleiste
     ax.axhline(-1.2, color="gray", lw=1)
     ticks = pd.date_range(start=min_date, end=max_date, freq="3D")
     for tick in ticks:
         ax.axvline(tick, ymin=0, ymax=1, color="lightgray", linestyle="--", linewidth=0.5)
         ax.text(tick, -1.4, tick.strftime('%d.%m'), ha='center', fontsize=8)
 
-    # Formatierungen
     ax.set_xlim([min_date, max_date])
     ax.set_ylim([-2, df["Y"].max() + 1.5])
     ax.set_axis_off()
-    ax.set_title("Projektliniennetzplan mit Zeitleiste und parallelen Linien", fontsize=14)
+    ax.set_title("Projektliniennetzplan – zentrierte Punkte bei versetzten Linien", fontsize=14)
     st.pyplot(fig)
 
-    # Exporte
     svg_buf = BytesIO()
     pdf_buf = BytesIO()
     fig.savefig(svg_buf, format="svg", bbox_inches="tight")
@@ -133,5 +136,5 @@ if st.button("🎯 Liniennetz anzeigen & exportieren"):
     svg_buf.seek(0)
     pdf_buf.seek(0)
 
-    st.download_button("⬇️ SVG herunterladen", data=svg_buf, file_name="netzplan.svg", mime="image/svg+xml")
-    st.download_button("⬇️ PDF herunterladen", data=pdf_buf, file_name="netzplan.pdf", mime="application/pdf")
+    st.download_button("⬇️ SVG herunterladen", data=svg_buf, file_name="netzplan_v7.svg", mime="image/svg+xml")
+    st.download_button("⬇️ PDF herunterladen", data=pdf_buf, file_name="netzplan_v7.pdf", mime="application/pdf")
