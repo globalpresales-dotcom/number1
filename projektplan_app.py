@@ -45,7 +45,16 @@ if st.button("📊 Liniennetzplan erstellen"):
                             G.add_edge(v, ms_id)
 
             # Layout und Zeichnen
-            pos = nx.spring_layout(G, k=1, iterations=50)
+            try:
+                from networkx.drawing.nx_agraph import graphviz_layout
+                pos = graphviz_layout(G, prog="dot")
+            except (ImportError, nx.NetworkXException):
+                # Fallback, falls pygraphviz nicht verfügbar oder Layout fehlschlägt
+                try:
+                    pos = nx.planar_layout(G)
+                except (nx.NetworkXException, ValueError):
+                    pos = nx.shell_layout(G)
+
             labels = nx.get_node_attributes(G, 'label')
 
             fig, ax = plt.subplots(figsize=(10, 7))

@@ -14,3 +14,4 @@ streamlit run projektplan_app.py
 - Dynamische Eingabe der Meilensteine und Abhängigkeiten
 - Visualisierung als gerichteter Graph
 - Intuitive Benutzeroberfläche
+- Optionales DAG-Layout über `pygraphviz` (`graphviz_layout` mit `dot`); ohne `pygraphviz` wird auf `planar_layout` bzw. `shell_layout` zurückgegriffen
