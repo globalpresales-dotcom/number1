@@ -8,10 +8,10 @@ from datetime import datetime
 import numpy as np
 from io import BytesIO
 
-st.set_page_config(page_title="Projektliniennetzplan V9.1", layout="wide")
-st.title("🚇 Projektliniennetzplan – V9.1: Vertikale Darstellung gefixt")
+st.set_page_config(page_title="Projektliniennetzplan V9.2", layout="wide")
+st.title("🚇 Projektliniennetzplan – V9.2: Stabil & mit Datum-Validierung")
 
-st.markdown("Diese Version behebt Darstellungsprobleme bei vertikaler Ausrichtung.")
+st.markdown("Diese Version zeigt Fehler direkt in der Oberfläche an, falls Daten fehlen oder ungültig sind.")
 
 # Einstellungen
 orientation = st.selectbox("Ausrichtung des Plans", ["horizontal", "vertikal"])
@@ -34,23 +34,30 @@ example_data = {
 
 df = st.data_editor(pd.DataFrame(example_data), num_rows="dynamic", use_container_width=True)
 
+# Validierung
+if "Datum" not in df.columns:
+    st.error("❌ Die Spalte 'Datum' fehlt.")
+    st.stop()
+
+if df["Datum"].isnull().any():
+    st.error("❌ Es gibt ungültige oder leere Datumsangaben in der Tabelle.")
+    st.stop()
+
 try:
-    df["Datum"] = pd.to_datetime(df["Datum"])
+    df["Datum"] = pd.to_datetime(df["Datum"], errors="raise")
 except Exception as e:
-    st.error("❌ Fehler beim Datum. Format: YYYY-MM-DD")
+    st.error(f"❌ Fehler beim Konvertieren der Datumsangaben: {e}")
     st.stop()
 
 min_date = df["Datum"].min() - pd.Timedelta(days=2)
 max_date = df["Datum"].max() + pd.Timedelta(days=2)
 
-# Hauptzeichnung
+# Zeichnung
 if st.button("🎯 Liniennetz anzeigen & exportieren"):
     fig, ax = plt.subplots(figsize=(10, 12) if orientation == "vertikal" else (16, 8))
-
     text_positions = []
     offsets = {}
 
-    # Berechne Offsets für parallele Linien
     shared_points = df.groupby(["Datum", "Meilenstein"]).filter(lambda g: len(g) > 1)
     for (datum, ms), group in shared_points.groupby(["Datum", "Meilenstein"]):
         lines = list(group["Linie"].unique())
@@ -71,7 +78,6 @@ if st.button("🎯 Liniennetz anzeigen & exportieren"):
         patch = mpatches.PathPatch(path, facecolor='none', lw=4, edgecolor=color, linestyle=style, zorder=1)
         ax.add_patch(patch)
 
-    # Zeichne Linien
     for linie in df["Linie"].unique():
         ldf = df[df["Linie"] == linie].sort_values(by="Datum")
         for i in range(len(ldf) - 1):
@@ -88,14 +94,13 @@ if st.button("🎯 Liniennetz anzeigen & exportieren"):
                 y0, y1 = y0 + off0, y1 + off1
             else:
                 y0, y1 = mdates.date2num(d0), mdates.date2num(d1)
-                x0, x1 = y0 + off0, y1 + off1  # gespiegelt: Datum → y
+                x0, x1 = y0 + off0, y1 + off1
 
             if x0 == x1 or y0 == y1:
                 ax.plot([x0, x1], [y0, y1], color=color, lw=4, linestyle=style, zorder=1)
             else:
                 draw_curve(x0, y0, x1, y1, color, style)
 
-    # Haltestellenpunkte und Texte
     for idx, row in df.iterrows():
         d, y, linie = row["Datum"], row["Y"], row["Linie"]
         ms = row["Meilenstein"]
@@ -127,7 +132,6 @@ if st.button("🎯 Liniennetz anzeigen & exportieren"):
                 fontweight="bold" if "bold" in fstyle else "normal",
                 zorder=6)
 
-    # Zeitleiste (optional)
     if show_timeline:
         ticks = pd.date_range(start=min_date, end=max_date, freq="3D")
         for tick in ticks:
@@ -139,7 +143,6 @@ if st.button("🎯 Liniennetz anzeigen & exportieren"):
                 ax.axhline(val, xmin=0, xmax=1, color="lightgray", linestyle="--", linewidth=0.5)
                 ax.text(-1.5, val, tick.strftime('%d.%m'), va='center', fontsize=8)
 
-    # Achsenbegrenzung
     if orientation == "horizontal":
         ax.set_xlim([mdates.date2num(min_date), mdates.date2num(max_date)])
         ax.set_ylim([-2, df["Y"].max() + 1.5])
@@ -150,7 +153,6 @@ if st.button("🎯 Liniennetz anzeigen & exportieren"):
     ax.set_axis_off()
     st.pyplot(fig)
 
-    # Export
     svg_buf = BytesIO()
     pdf_buf = BytesIO()
     fig.savefig(svg_buf, format="svg", bbox_inches="tight")
@@ -158,5 +160,5 @@ if st.button("🎯 Liniennetz anzeigen & exportieren"):
     svg_buf.seek(0)
     pdf_buf.seek(0)
 
-    st.download_button("⬇️ SVG herunterladen", data=svg_buf, file_name="netzplan_v9_1.svg", mime="image/svg+xml")
-    st.download_button("⬇️ PDF herunterladen", data=pdf_buf, file_name="netzplan_v9_1.pdf", mime="application/pdf")
+    st.download_button("⬇️ SVG herunterladen", data=svg_buf, file_name="netzplan_v9_2.svg", mime="image/svg+xml")
+    st.download_button("⬇️ PDF herunterladen", data=pdf_buf, file_name="netzplan_v9_2.pdf", mime="application/pdf")
