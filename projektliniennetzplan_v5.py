@@ -8,10 +8,10 @@ from datetime import datetime
 import numpy as np
 from io import BytesIO
 
-st.set_page_config(page_title="Projektliniennetzplan V5", layout="wide")
-st.title("🚇 Projektliniennetzplan – V5: Kurven, Stile & SVG/PDF")
+st.set_page_config(page_title="Projektliniennetzplan V6", layout="wide")
+st.title("🚇 Projektliniennetzplan – V6: Parallele Linien, Zeitleiste & Textformatierung")
 
-st.markdown("Metro-inspirierte Liniennetzpläne mit geschwungenen Übergängen, Stiloptionen und exportierbarer Vektorgrafik.")
+st.markdown("Linien verlaufen nebeneinander bei gemeinsamen Haltestellen, unten wird eine Zeitleiste dargestellt, Texte sind formatierbar.")
 
 st.subheader("📝 Eingabetabelle")
 
@@ -23,7 +23,9 @@ example_data = {
     "Y": [0, 0, 0, 1, 1, 1],
     "Beschriftung": ["Projektstart", "Analyse", "Review", "Projektstart", "Analyse", "Umsetzung"],
     "Linienart": ["solid", "dashed", "solid", "solid", "dotted", "solid"],
-    "Textposition": ["oben", "oben", "oben", "unten", "unten", "unten"]
+    "Textposition": ["oben", "oben", "oben", "unten", "unten", "unten"],
+    "Schriftgröße": [9, 9, 9, 9, 9, 9],
+    "Schriftart": ["normal", "italic", "bold", "italic", "normal", "bold"]
 }
 
 df = st.data_editor(pd.DataFrame(example_data), num_rows="dynamic", use_container_width=True)
@@ -38,13 +40,13 @@ min_date = df["Datum"].min() - pd.Timedelta(days=2)
 max_date = df["Datum"].max() + pd.Timedelta(days=2)
 
 if st.button("🎯 Liniennetz anzeigen & exportieren"):
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig, ax = plt.subplots(figsize=(16, 8))
 
     text_positions = []
+    y_offsets = {}
 
     def draw_curve(x0, y0, x1, y1, color, style):
         Path = mpath.Path
-        dx = (x1 - x0) / np.timedelta64(1, 'D')  # in days
         x0n = mdates.date2num(x0)
         x1n = mdates.date2num(x1)
         verts = [
@@ -58,7 +60,7 @@ if st.button("🎯 Liniennetz anzeigen & exportieren"):
         patch = mpatches.PathPatch(path, facecolor='none', lw=4, edgecolor=color, linestyle=style, zorder=1)
         ax.add_patch(patch)
 
-    # Linien zeichnen
+    # Linienverläufe berechnen
     for linie in df["Linie"].unique():
         ldf = df[df["Linie"] == linie].sort_values(by="Datum")
         for i in range(len(ldf) - 1):
@@ -71,46 +73,56 @@ if st.button("🎯 Liniennetz anzeigen & exportieren"):
             else:
                 draw_curve(x0, y0, x1, y1, farbe, stil)
 
-    # Haltestellen kombinieren
-    seen = {}
-    for idx, row in df.iterrows():
-        key = (row["Meilenstein"], row["Datum"], row["Y"])
-        if key not in seen:
-            seen[key] = {"linien": [row["Linie"]], "farbe": row["Farbe"], "beschriftung": row["Beschriftung"], "textpos": row["Textposition"]}
-        else:
-            seen[key]["linien"].append(row["Linie"])
+    # Gemeinsame Haltestellen → Offset je Linie erzeugen
+    shared_points = df.groupby(["Datum", "Meilenstein"]).filter(lambda g: len(g) > 1)
+    for (datum, ms), group in shared_points.groupby(["Datum", "Meilenstein"]):
+        lines = list(group["Linie"].unique())
+        for i, linie in enumerate(lines):
+            key = (datum, ms, linie)
+            y_offsets[key] = i * 0.15 - (len(lines) - 1) * 0.15 / 2  # zentriert
 
-    # Meilensteine + Texte
-    for (ms, datum, y), info in seen.items():
-        count = len(set(info["linien"]))
-        marker = "s" if count > 1 else "o"
-        ax.plot(datum, y, marker=marker, color="white", markersize=16 if count > 1 else 12,
+    # Haltestellen + Texte
+    for idx, row in df.iterrows():
+        x = row["Datum"]
+        y = row["Y"]
+        linie = row["Linie"]
+        ms = row["Meilenstein"]
+        beschriftung = row["Beschriftung"]
+        pos = row["Textposition"]
+        font_size = row["Schriftgröße"]
+        font_style = row["Schriftart"]
+        offset_y = y_offsets.get((x, ms, linie), 0)
+        y_draw = y + offset_y
+
+        ax.plot(x, y_draw, marker="o", color="white", markersize=12,
                 markeredgewidth=2.5, markeredgecolor="black", zorder=5)
 
-        # Textpositionierung mit einfacher Kollisionsvermeidung
-        offset = 0.3 if info["textpos"] == "oben" else -0.4
-        y_text = y + offset
+        text_offset = 0.35 if pos == "oben" else -0.45
+        y_text = y_draw + text_offset
 
-        # Prüfe auf bestehende Texte an der Position
-        while any(abs(y_text - yp) < 0.15 and abs((mdates.date2num(datum) - mdates.date2num(dp))) < 0.4 for dp, yp in text_positions):
-            y_text += 0.15 if offset > 0 else -0.15
+        while any(abs(y_text - yp) < 0.2 and abs((mdates.date2num(x) - mdates.date2num(xp))) < 0.5 for xp, yp in text_positions):
+            y_text += 0.2 if text_offset > 0 else -0.2
 
-        text_positions.append((datum, y_text))
+        text_positions.append((x, y_text))
 
-        ax.text(datum, y_text, info["beschriftung"], ha="center", fontsize=9,
-                style="italic", fontweight="medium", zorder=6)
+        ax.text(x, y_text, beschriftung,
+                ha="center", fontsize=font_size,
+                fontstyle="italic" if "italic" in font_style else "normal",
+                fontweight="bold" if "bold" in font_style else "normal",
+                zorder=6)
 
-    # Format Achsen
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%d.%m'))
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=3))
+    # Zeitachse / Zeitleiste
+    ax.axhline(-1.2, color="gray", lw=1)
+    ticks = pd.date_range(start=min_date, end=max_date, freq="3D")
+    for tick in ticks:
+        ax.axvline(tick, ymin=0, ymax=1, color="lightgray", linestyle="--", linewidth=0.5)
+        ax.text(tick, -1.4, tick.strftime('%d.%m'), ha='center', fontsize=8)
+
+    # Formatierungen
     ax.set_xlim([min_date, max_date])
-    ax.set_yticks(sorted(df["Y"].unique()))
-    ax.set_yticklabels([f"Linie {l}" for l in df.groupby("Y")["Linie"].first()])
-    ax.set_ylim([-1, df["Y"].max() + 1])
-    ax.grid(True, axis='x', linestyle='--', alpha=0.3)
-    ax.set_axisbelow(True)
+    ax.set_ylim([-2, df["Y"].max() + 1.5])
     ax.set_axis_off()
-    ax.legend()
+    ax.set_title("Projektliniennetzplan mit Zeitleiste und parallelen Linien", fontsize=14)
     st.pyplot(fig)
 
     # Exporte
