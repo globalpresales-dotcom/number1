@@ -8,10 +8,10 @@ from datetime import datetime
 import numpy as np
 from io import BytesIO
 
-st.set_page_config(page_title="Projektliniennetzplan V9.3", layout="wide")
-st.title("🚇 Projektliniennetzplan – V9.3: Diagnosesicher & stabil")
+st.set_page_config(page_title="Projektliniennetzplan V9.4", layout="wide")
+st.title("🚇 Projektliniennetzplan – V9.4: Kompilierbar & stabil")
 
-st.markdown("Diese Version fängt **alle Fehler elegant ab** und zeigt sie direkt an.")
+st.markdown("Diese Version behebt den f-string-Syntaxfehler und bleibt diagnosefähig.")
 
 orientation = st.selectbox("Ausrichtung des Plans", ["horizontal", "vertikal"])
 show_timeline = st.checkbox("Zeitleiste anzeigen", value=True)
@@ -32,7 +32,6 @@ example_data = {
 
 df = st.data_editor(pd.DataFrame(example_data), num_rows="dynamic", use_container_width=True)
 
-# --- VALIDIERUNG ---
 required_cols = ["Datum", "Linie", "Farbe", "Y", "Beschriftung", "Linienart", "Textposition", "Schriftgröße", "Schriftart", "Textabstand"]
 missing = [col for col in required_cols if col not in df.columns]
 if missing:
@@ -51,7 +50,6 @@ except Exception as e:
     st.error(f"❌ Fehler beim Konvertieren der 'Datum'-Spalte: {e}")
     st.stop()
 
-# Zeichnung mit Fehlerabfang
 try:
     min_date = df["Datum"].min() - pd.Timedelta(days=2)
     max_date = df["Datum"].max() + pd.Timedelta(days=2)
@@ -163,10 +161,8 @@ try:
         svg_buf.seek(0)
         pdf_buf.seek(0)
 
-        st.download_button("⬇️ SVG herunterladen", data=svg_buf, file_name="netzplan_v9_3.svg", mime="image/svg+xml")
-        st.download_button("⬇️ PDF herunterladen", data=pdf_buf, file_name="netzplan_v9_3.pdf", mime="application/pdf")
+        st.download_button("⬇️ SVG herunterladen", data=svg_buf, file_name="netzplan_v9_4.svg", mime="image/svg+xml")
+        st.download_button("⬇️ PDF herunterladen", data=pdf_buf, file_name="netzplan_v9_4.pdf", mime="application/pdf")
 
 except Exception as e:
-    st.error(f"💥 Unerwarteter Fehler beim Zeichnen der Grafik:
-
-`{e}`")
+    st.error("💥 Unerwarteter Fehler beim Zeichnen der Grafik: {}".format(e))
